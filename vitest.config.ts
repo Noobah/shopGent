@@ -18,10 +18,16 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
-    include: ["tests/unit/**/*.test.{ts,tsx}", "tests/integration/**/*.test.{ts,tsx}"],
+    include: [
+      "tests/unit/**/*.test.{ts,tsx}",
+      "tests/integration/**/*.test.{ts,tsx}",
+      "tests/contract/**/*.test.{ts,tsx}",
+    ],
     env: {
       NODE_ENV: "test",
       MONGODB_URI: "mongodb://127.0.0.1:27017/shoppilot-test",
+      LLM_PROVIDER: "mock",
+      RUN_LIVE_TESTS: "0",
     },
     // Integration tests may touch a real (test) DB; give them room.
     testTimeout: 15_000,
