@@ -1,0 +1,27 @@
+# Local MongoDB for ShopPilot.
+#
+# NOTE: The current dev machine has no Docker and runs a system `mongod` on
+# 127.0.0.1:27017, so local dev does NOT require this file. It is shipped so
+# anyone else on a Docker-capable machine can spin up an identical DB with:
+#
+#   docker compose up -d
+#
+# then point MONGODB_URI at it (default below matches .env.example).
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: shoppilot-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - shoppilot-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  shoppilot-mongo-data:
