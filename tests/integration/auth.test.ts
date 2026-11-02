@@ -157,6 +157,20 @@ describe("ownership repository returns 404 shape", () => {
   });
 });
 
+describe("lazy DB connection", () => {
+  it("resolves auth after the connection is dropped (no /api/health prerequisite)", async () => {
+    const id = await signupReturnId();
+    await disconnectDb();
+
+    try {
+      const user = await requireUser();
+      expect(user._id.toString()).toBe(id);
+    } finally {
+      await connectDb();
+    }
+  });
+});
+
 // Helper: sign up and return the id.
 async function signupReturnId(): Promise<string> {
   await signup({ email: "x@example.com", password: PW, displayName: "X" });

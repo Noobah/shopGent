@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { isValidObjectId } from "mongoose";
+import { connectDb } from "@/lib/db";
 import { SessionModel, UserModel, type UserDoc, type SessionDoc } from "./models";
 
 /**
@@ -49,6 +50,7 @@ export async function createSession(
   userId: string,
   userAgent?: string | null,
 ): Promise<void> {
+  await connectDb();
   const raw = generateRawToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
@@ -98,6 +100,7 @@ export interface ResolvedSession {
  */
 export async function getSessionFromToken(raw: string): Promise<ResolvedSession | null> {
   if (!raw) return null;
+  await connectDb();
 
   const session = await SessionModel.findOne({ tokenHash: hashToken(raw) }).lean();
   if (!session) return null;
@@ -113,6 +116,7 @@ export async function getSessionFromToken(raw: string): Promise<ResolvedSession 
 /** Revoke a session by raw token (logout). No-op if not found. */
 export async function revokeSessionByToken(raw: string): Promise<void> {
   if (!raw) return;
+  await connectDb();
   await SessionModel.updateOne(
     { tokenHash: hashToken(raw) },
     { $set: { revokedAt: new Date() } },
@@ -132,10 +136,12 @@ export async function getSessionForUser(
   sessionId: string,
 ): Promise<SessionDoc | null> {
   if (!isValidObjectId(sessionId)) return null;
+  await connectDb();
   return SessionModel.findOne({ _id: sessionId, userId }).lean();
 }
 
 /** List all of a user's sessions (ownership baked in). */
 export async function listSessionsForUser(userId: string): Promise<SessionDoc[]> {
+  await connectDb();
   return SessionModel.find({ userId }).lean();
 }

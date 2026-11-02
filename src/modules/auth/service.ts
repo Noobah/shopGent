@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { connectDb } from "@/lib/db";
 import { ConflictError, AuthError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
@@ -32,6 +33,7 @@ function newToken(): string {
  * the public signup form we must tell the user to use a different email).
  */
 export async function signup(input: SignupInput): Promise<string> {
+  await connectDb();
   const email = input.email.toLowerCase();
   const existing = await UserModel.findOne({ email }).lean();
   if (existing) {
@@ -69,6 +71,7 @@ export async function signup(input: SignupInput): Promise<string> {
  * never reveal which emails are registered.
  */
 export async function login(input: LoginInput): Promise<string> {
+  await connectDb();
   const email = input.email.toLowerCase();
   const genericError = new AuthError("Invalid email or password");
 
@@ -95,6 +98,7 @@ export async function logout(): Promise<void> {
 
 /** Verify an email via one-time token. Idempotent-ish: already-verified is fine. */
 export async function verifyEmail(input: VerifyEmailInput): Promise<void> {
+  await connectDb();
   const user = await UserModel.findOne({
     emailVerificationTokenHash: hashToken(input.token),
     emailVerificationExpiresAt: { $gt: new Date() },
@@ -114,6 +118,7 @@ export async function verifyEmail(input: VerifyEmailInput): Promise<void> {
  * emails) so the endpoint can't be used to enumerate registered accounts.
  */
 export async function requestPasswordReset(input: ResetRequestInput): Promise<void> {
+  await connectDb();
   const email = input.email.toLowerCase();
   const user = await UserModel.findOne({ email });
 
@@ -137,6 +142,7 @@ export async function requestPasswordReset(input: ResetRequestInput): Promise<vo
 
 /** Complete a password reset via one-time token. Invalidates existing sessions. */
 export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  await connectDb();
   const user = await UserModel.findOne({
     passwordResetTokenHash: hashToken(input.token),
     passwordResetExpiresAt: { $gt: new Date() },
