@@ -20,7 +20,9 @@ const envSchema = z.object({
   // --- LLM (LLMProvider seam) --------------------------------------------
   // Which provider adapter to construct. `mock` is the default for dev and all
   // tests so no API key is ever required to boot the app or run the suite.
-  LLM_PROVIDER: z.enum(["mock", "grok"]).default("mock"),
+  // `grok`  = xAI Grok      (GROK_API_KEY)
+  // `groq`  = GroqCloud     (SHOPSY_API_KEY) — both OpenAI-compatible.
+  LLM_PROVIDER: z.enum(["mock", "grok", "groq"]).default("mock"),
 
   // xAI Grok speaks an OpenAI-compatible API. Only required when
   // LLM_PROVIDER=grok; the factory enforces presence at construction time so
@@ -28,6 +30,24 @@ const envSchema = z.object({
   GROK_API_KEY: z.string().optional(),
   GROK_MODEL: z.string().min(1).default("grok-3"),
   GROK_BASE_URL: z.string().url().default("https://api.x.ai"),
+
+  // Groq credentials (the key name is SHOPSY_API_KEY). Only required when
+  // LLM_PROVIDER=groq; same fail-loud rule as Grok — no silent mock fallback.
+  // Base URL is without `/chat/completions`; the adapter appends `/v1/...`.
+  SHOPSY_API_KEY: z.string().optional(),
+  SHOPSY_MODEL: z.string().min(1).default("llama-3.3-70b-versatile"),
+  SHOPSY_BASE_URL: z.string().url().default("https://api.groq.com/openai"),
+
+  // --- Product source (ProductSource seam, Phase 3) -----------------------
+  // `mock` = deterministic fixtures (default for dev + tests)
+  // `live` = real HTTP adapter; requires PRODUCT_SOURCE_BASE_URL
+  PRODUCT_SOURCE: z.enum(["mock", "live"]).default("mock"),
+  PRODUCT_SOURCE_BASE_URL: z.string().url().optional(),
+  PRODUCT_SOURCE_API_KEY: z.string().optional(),
+
+  // --- Seller trust policy (code-enforced, never the LLM's opinion) -------
+  TRUST_MIN_RATING: z.coerce.number().min(0).max(5).default(4.0),
+  TRUST_MIN_RATING_COUNT: z.coerce.number().int().min(0).default(50),
 
   // Live external tests only run when explicitly enabled (default off).
   RUN_LIVE_TESTS: z

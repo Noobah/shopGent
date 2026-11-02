@@ -87,6 +87,61 @@ describe("createLLMProvider", () => {
   });
 });
 
+describe("groq (the SHOPSY_API_KEY provider)", () => {
+  it("returns the Groq adapter when LLM_PROVIDER=groq and SHOPSY_API_KEY is set", () => {
+    setEnv({ LLM_PROVIDER: "groq" });
+    setEnv({ SHOPSY_API_KEY: "gsk-test" });
+    const p = createLLMProvider();
+    expect(p).toBeInstanceOf(GrokProvider); // same OpenAI-compatible adapter
+    expect(p.id).toBe("groq");
+  });
+
+  it("throws (does NOT silently fall back to mock) when groq lacks a key", () => {
+    setEnv({ LLM_PROVIDER: "groq" });
+    setEnv({ SHOPSY_API_KEY: undefined });
+    expect(() => createLLMProvider()).toThrow(/SHOPSY_API_KEY/);
+  });
+
+  it("uses the env model for groq when no explicit model is given", () => {
+    setEnv({ LLM_PROVIDER: "groq" });
+    setEnv({ SHOPSY_API_KEY: "gsk-test" });
+    setEnv({ SHOPSY_MODEL: "openai/gpt-oss-120b" });
+    const p = createLLMProvider();
+    expect(p.model).toBe("openai/gpt-oss-120b");
+  });
+
+  it("posts to the Groq base URL with /v1/chat/completions appended", async () => {
+    setEnv({ LLM_PROVIDER: "groq" });
+    setEnv({ SHOPSY_API_KEY: "gsk-test" });
+    setEnv({ SHOPSY_BASE_URL: "https://api.groq.com/openai" });
+
+    let seenUrl = "";
+    const p = createLLMProvider({
+      fetchImpl: async (input) => {
+        seenUrl = String(input);
+        return new Response("data: [DONE]\n\n", { status: 200 });
+      },
+    });
+    const events: unknown[] = [];
+    for await (const event of p.chat({ messages: [] })) events.push(event);
+    expect(events.length).toBeGreaterThan(0);
+    expect(seenUrl).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("keeps provider identity distinct: grok id stays 'grok', groq id is 'groq'", () => {
+    setEnv({ LLM_PROVIDER: "grok" });
+    setEnv({ GROK_API_KEY: "sk-test" });
+    const grok = createLLMProvider();
+
+    setEnv({ LLM_PROVIDER: "groq" });
+    setEnv({ SHOPSY_API_KEY: "gsk-test" });
+    const groq = createLLMProvider();
+
+    expect(grok.id).toBe("grok");
+    expect(groq.id).toBe("groq");
+  });
+});
+
 describe("provider switching via env (no code change)", () => {
   it("the same factory call returns different adapters as env flips", () => {
     // Simulate flipping only the env var — the factory call site never changes.
@@ -124,9 +179,10 @@ describe("getLLMProvider singleton", () => {
 });
 
 describe("no-API-key guarantee", () => {
-  it("the default (unset env) never requires GROK_API_KEY", () => {
+  it("the default (unset env) never requires GROK_API_KEY or SHOPSY_API_KEY", () => {
     setEnv({ LLM_PROVIDER: undefined });
     setEnv({ GROK_API_KEY: undefined });
+    setEnv({ SHOPSY_API_KEY: undefined });
     // Must not throw — this is what lets the whole test suite run keyless.
     expect(() => createLLMProvider()).not.toThrow();
   });

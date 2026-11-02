@@ -25,6 +25,14 @@ export interface GrokProviderOptions {
   model: string;
   /** Base URL without a trailing slash, e.g. https://api.x.ai */
   baseUrl: string;
+  /**
+   * Provider id reported by `LLMProvider.id`. Defaults to "grok"; the Groq
+   * adapter reuses this exact wire protocol with id "groq" (both vendors speak
+   * OpenAI-compatible chat completions).
+   */
+  id?: string;
+  /** Human-readable vendor name used in errors and logs. Defaults to "Grok". */
+  label?: string;
   /** Per-request timeout in ms. */
   timeoutMs?: number;
   /** Injectable fetch for tests (HTTP-level mocking). */
@@ -59,19 +67,22 @@ interface PendingToolCall {
 }
 
 export class GrokProvider implements LLMProvider {
-  readonly id = "grok";
+  readonly id: string;
   readonly model: string;
 
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly label: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: GrokProviderOptions) {
+    this.id = options.id ?? "grok";
+    this.label = options.label ?? "Grok";
     if (!options.apiKey) {
       throw new ExternalServiceError(
         502,
-        "GrokProvider requires an API key (set GROK_API_KEY)",
+        `${this.label}Provider requires an API key (set ${this.id === "groq" ? "SHOPSY_API_KEY" : "GROK_API_KEY"})`,
       );
     }
     this.apiKey = options.apiKey;
@@ -117,16 +128,16 @@ export class GrokProvider implements LLMProvider {
 
       if (!response.ok) {
         const detail = await safeText(response);
-        logger.error("llm.grok.http_error", { status: response.status });
+        logger.error(`llm.${this.id}.http_error`, { status: response.status });
         const isTimeout = false;
         throw new ExternalServiceError(
           response.status === 504 || isTimeout ? 504 : 502,
-          `Grok request failed (${response.status})`,
+          `${this.label} request failed (${response.status})`,
           { cause: detail },
         );
       }
       if (!response.body) {
-        throw new ExternalServiceError(502, "Grok response had no body");
+        throw new ExternalServiceError(502, `${this.label} response had no body`);
       }
 
       yield* this.parseStream(response.body, controller.signal);
@@ -137,12 +148,12 @@ export class GrokProvider implements LLMProvider {
           yield { type: "finish", reason: "error" };
           return;
         }
-        logger.warn("llm.grok.timeout", { timeoutMs: this.timeoutMs });
-        throw new ExternalServiceError(504, "Grok request timed out");
+        logger.warn(`llm.${this.id}.timeout`, { timeoutMs: this.timeoutMs });
+        throw new ExternalServiceError(504, `${this.label} request timed out`);
       }
       if (err instanceof ExternalServiceError) throw err;
-      logger.error("llm.grok.unknown_error", { err });
-      throw new ExternalServiceError(502, "Grok request failed", { cause: err });
+      logger.error(`llm.${this.id}.unknown_error`, { err });
+      throw new ExternalServiceError(502, `${this.label} request failed`, { cause: err });
     } finally {
       clearTimeout(timeout);
       options.signal?.removeEventListener("abort", onAbort);
