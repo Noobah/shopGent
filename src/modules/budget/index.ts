@@ -73,33 +73,34 @@ export type BudgetInput = z.infer<typeof budgetInputSchema>;
 
 // ---- result --------------------------------------------------------------
 
-export interface BudgetResult {
-  budgetPaise: number;
-  lineCount: number;
-  /** Sum of unitPrice × quantity. Always known. */
-  subtotalPaise: number;
-  /** Known shipping only; see `shippingKnown`. */
-  shippingPaise: number;
-  /** True when EVERY line's shipping amount (or the flat rule) is known. */
-  shippingKnown: boolean;
-  /** Known tax only; see `taxKnown`. */
-  taxPaise: number;
-  taxKnown: boolean;
-  /** subtotal + known shipping + known tax. */
-  totalPaise: number;
-  /** budget − totalPaise. Negative when over budget. */
-  remainingPaise: number;
-  /** How far over budget (0 when within). */
-  overagePaise: number;
-  /** Known costs fit inside the budget. */
-  fitsKnownBudget: boolean;
-  /** Known costs fit AND nothing is unknown — safe to say "within budget". */
-  withinBudget: boolean;
-  /** True when any cost is unknown (shipping or tax). */
-  hasUnknownCosts: boolean;
-  /** Which costs are unknown — displayed as "unknown", never estimated. */
-  unknownCosts: { shipping: boolean; tax: boolean };
-}
+/**
+ * Runtime contract for a computed budget.
+ *
+ * `computeBudget` parses its own output with this schema, and the agent tool
+ * layer validates tool results with it too. That means a drift between the pure
+ * math and the shape the LLM/UI receives is a loud failure, not a bad total.
+ */
+export const budgetResultSchema = z.object({
+  budgetPaise: paiseFieldSchema,
+  lineCount: z.number().int().min(0),
+  subtotalPaise: paiseFieldSchema,
+  shippingPaise: paiseFieldSchema,
+  shippingKnown: z.boolean(),
+  taxPaise: paiseFieldSchema,
+  taxKnown: z.boolean(),
+  totalPaise: paiseFieldSchema,
+  remainingPaise: z.number().int(),
+  overagePaise: paiseFieldSchema,
+  fitsKnownBudget: z.boolean(),
+  withinBudget: z.boolean(),
+  hasUnknownCosts: z.boolean(),
+  unknownCosts: z.object({
+    shipping: z.boolean(),
+    tax: z.boolean(),
+  }),
+});
+
+export type BudgetResult = z.infer<typeof budgetResultSchema>;
 
 // ---- pure math -----------------------------------------------------------
 
@@ -202,7 +203,7 @@ export function computeBudget(input: BudgetInput): BudgetResult {
   const fitsKnownBudget = remainingPaise >= 0;
   const hasUnknownCosts = !shippingKnown || !taxKnown;
 
-  return {
+  return budgetResultSchema.parse({
     budgetPaise,
     lineCount: lines.length,
     subtotalPaise,
@@ -217,7 +218,7 @@ export function computeBudget(input: BudgetInput): BudgetResult {
     withinBudget: fitsKnownBudget && !hasUnknownCosts,
     hasUnknownCosts,
     unknownCosts: { shipping: !shippingKnown, tax: !taxKnown },
-  };
+  });
 }
 
 /**
@@ -232,6 +233,8 @@ export function isWithinBudget(result: BudgetResult): boolean {
 export function remainingPaise(result: BudgetResult): number {
   return result.remainingPaise;
 }
+
+export * from "./parse";
 
 /**
  * Honest-failure helper: lines ordered by how much they cost the cart, so the

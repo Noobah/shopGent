@@ -15,8 +15,12 @@ import type {
  * through any conversation shape without touching the network.
  *
  * Script selection:
- *  - If a `scripts` map is provided, the script is chosen by the LAST user
- *    message (exact match), falling back to `defaultScript`.
+ *  - If `sequence` is provided, the Nth chat() call gets the Nth script. This
+ *    is what drives a multi-turn agent loop deterministically (tool call ->
+ *    tool result -> next tool call -> final answer). After the sequence is
+ *    exhausted the last script repeats, which lets tests exercise the step cap.
+ *  - Otherwise, if a `scripts` map is provided, the script is chosen by the
+ *    LAST user message (exact match), falling back to `defaultScript`.
  *  - If no scripts are given, a single `script` (or an empty reply) is used.
  */
 
@@ -44,6 +48,11 @@ export interface MockProviderOptions {
   script?: MockScript;
   /** Map of last-user-message -> script, plus an optional `default`. */
   scripts?: Record<string, MockScript>;
+  /**
+   * Per-call scripts, consumed in order. After exhaustion the last script
+   * repeats (useful for step-cap tests).
+   */
+  sequence?: MockScript[];
   /** Model label reported by the provider. */
   model?: string;
   /** Artificial delay per step (ms) to exercise streaming timing in tests. */
@@ -58,7 +67,9 @@ export class MockProvider implements LLMProvider {
 
   private readonly script?: MockScript;
   private readonly scripts?: Record<string, MockScript>;
+  private readonly sequence?: MockScript[];
   private readonly delayMs: number;
+  private sequenceIndex = 0;
 
   /** Every request received, so tests can assert on messages/tools sent. */
   readonly calls: ChatOptions[] = [];
@@ -67,10 +78,23 @@ export class MockProvider implements LLMProvider {
     this.model = options.model ?? "mock-model";
     this.script = options.script;
     this.scripts = options.scripts;
+    this.sequence = options.sequence;
     this.delayMs = options.delayMs ?? 0;
   }
 
+  /** Reset the per-call sequence (tests reuse one provider instance). */
+  resetSequence(): void {
+    this.sequenceIndex = 0;
+  }
+
   private pickScript(messages: LLMMessage[]): MockScript {
+    if (this.sequence && this.sequence.length > 0) {
+      const index = Math.min(this.sequenceIndex, this.sequence.length - 1);
+      this.sequenceIndex += 1;
+      // Non-empty by construction; the fallback keeps TS happy.
+      return this.sequence[index] ?? EMPTY_SCRIPT;
+    }
+
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     const key = lastUser?.content ?? "";
 

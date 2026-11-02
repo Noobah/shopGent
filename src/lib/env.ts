@@ -49,6 +49,13 @@ const envSchema = z.object({
   TRUST_MIN_RATING: z.coerce.number().min(0).max(5).default(4.0),
   TRUST_MIN_RATING_COUNT: z.coerce.number().int().min(0).default(50),
 
+  // --- Agent loop limits ---------------------------------------------------
+  // Hard cap on LLM turns inside one request. The build prompt fixes this at 8;
+  // it is configurable only so tests can exercise the cap cheaply.
+  AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),
+  // Per-user daily cap on agent steps (LLM turns), shared across sessions.
+  AGENT_DAILY_STEPS: z.coerce.number().int().min(1).default(200),
+
   // Live external tests only run when explicitly enabled (default off).
   RUN_LIVE_TESTS: z
     .enum(["0", "1"])

@@ -31,6 +31,9 @@ export default defineConfig({
     },
     // Integration tests may touch a real (test) DB; give them room.
     testTimeout: 15_000,
+    // Integration files share one test database and truncate collections in
+    // beforeEach, so they must not run concurrently with each other.
+    fileParallelism: false,
     // Run e2e separately via Playwright, not Vitest.
     exclude: ["tests/e2e/**", "node_modules/**"],
   },
